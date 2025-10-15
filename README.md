@@ -1,146 +1,152 @@
-# 🧭 Stock & HPP ERP System — Event-Driven Architecture
+# SP Otoparts ERP System — Modular Event-Driven Architecture
 
-## 📌 Overview
-This project is a **modular, event-driven ERP system** built to handle **real-time stock management, FIFO (HPP calculation), and anomaly detection** for an automotive parts company.  
-The system is designed to be **fast (<100ms stock validation)**, **accurate (batch-level HPP)**, and **resilient against human errors**.
+## Overview
 
----
-
-## 🏗️ Architecture
-
-[Warehouse & Gate Manager]
-│
-▼
-[Stock Movement] ──▶ [Stock Balance Quick View]
-│ │
-│ └─▶ used for real-time stock validation
-▼
-[FIFO Queue (stock_inbound_remaining)]
-│
-▼
-[HPP Queue & Worker]
-│
-▼
-[Accounting Service]
-
-
-- All transactions are recorded in `stock_movement` as a **single source of truth**.  
-- `Stock Balance Quick View` keeps a **summed stock state** (inbound - outbound) for quick validation on every order.  
-- FIFO queues manage only active batches (remaining_qty > 0) for **efficient HPP accuracy**.  
-- Accounting is updated asynchronously through **queue events** to maintain performance.
+SP Otoparts ERP is a modular, event-driven enterprise system designed to manage the entire business process — from purchasing and production to inventory, sales, finance, and HR — with automation, consistency, and fault tolerance.
+It combines real-time speed with batch-level accuracy, supported by a fully synchronized PostgreSQL architecture.
 
 ---
 
-## ⚙️ Tech Stack
+## Architecture Overview
 
-| Layer | Technology |
-|:------|:------------|
-| **Frontend** | React 18, TypeScript, TailwindCSS |
-| **Backend** | Go (Gin Framework, pgxpool, Redis client) |
-| **Database** | PostgreSQL (triggers, functions, materialized views) |
-| **Cache** | Redis (for real-time stock validation) |
-| **Infra & DevOps** | Docker Compose, GitHub Actions (self-hosted runner), Ubuntu Server, Cloudflare Tunnel |
+```
+[Purchase & Request Flow]
+    |
+    v
+[Warehouse & Stock Engine] --> [Stock Balance Quick View]
+|      |
+|      --> Real-time validation + anomaly detection
+v
+[FIFO + HPP Queue Engine]
+|
+v
+[Accounting & Financial Journal]
+|
+v
+[Dashboard & Reporting Layer]
+|
+--> [HR + Attendance + Issue Tracking]
+```
 
----
-
-## 🧮 Core Concepts
-
-### 1. Real-Time Stock Validation
-- Validation uses a **simple SUM(inbound - outbound)** formula for speed.  
-- Sales Orders lock stock via `stock_reservation`.  
-- If stock is insufficient, the system automatically generates a **backorder**.
-
-### 2. FIFO Live Queue
-- Maintains only active batches (`remaining_qty > 0`).
-- When a batch is depleted → it’s automatically removed from the queue.
-- Late inputs trigger **partial reload** from the affected checkpoint.
-- Efficient and minimal recalculation ensures **fast and accurate HPP**.
-
-### 3. HPP (Cost of Goods) Queue System
-- `fn_calc_hpp()` → recalculates asynchronously.  
-- `fn_get_hpp()` → retrieves real-time snapshot of current HPP.
-- Changes in price or retroactive inputs automatically send **events** to reprocess affected data.
-
-### 4. Anomaly Detection
-The system automatically detects and marks operational anomalies:
-| Code | Meaning |
-|------|----------|
-| `LATE_INPUT` | Created date > actual transaction date |
-| `NEGATIVE_STOCK` | Stock balance below 0 |
-| `MISSING_GATE` | Gate ID missing from movement record |
+* Every transaction flows through an event queue to ensure consistency across departments
+* Stock movement acts as the single source of truth for all inventory changes
+* FIFO and HPP queues ensure accurate cost-of-goods calculations without performance loss
+* Finance modules automatically log journal entries based on operational data
+* HR and Attendance modules integrate employee presence and activity logging
 
 ---
 
-## 🧠 Design Principles
+## Tech Stack
 
-| Principle | Description |
-|:-----------|:-------------|
-| **Separation of Layers** | Fast validation ≠ Accurate calculation |
-| **Event-driven** | All updates go through queues, not cascaded SQL triggers |
-| **Partial Refresh** | Only changed data is recalculated |
-| **Tolerant to Errors** | Detects anomaly, doesn’t crash |
-| **Human-proof** | Input mistakes are logged, not destructive |
-
----
-
-## 🚨 Checkpoint & Recovery System
-- Negative stock automatically creates a **checkpoint**, preventing backdated corruption.  
-- Each SKU can have multiple checkpoints as operational indicators.  
-- `stock_fix_queue` repairs only affected SKUs (no full refresh).
+* Frontend: React 18, TypeScript, TailwindCSS
+* Backend: Go (Gin Framework, pgxpool, Redis client)
+* Database: PostgreSQL (functions, triggers, materialized views)
+* Cache / Queue: Redis (real-time validation and async processing)
+* Infrastructure: Docker Compose, GitHub Actions (self-hosted runner), Ubuntu Server
+* Security: Role-based Access Control, Page Access, Cloudflare Tunnel
 
 ---
 
-## 🚀 Results
-- ⚡ Real-time validation under **100 ms**
-- 💰 Accurate **batch-level HPP**
-- 🧩 Modular and scalable across multiple warehouses
-- 🛡️ Zero minus-stock incidents
-- 🤖 Automatic anomaly detection and correction queues
+## Core Capabilities
+
+### Stock & Warehouse
+
+* Real-time stock validation using SUM(inbound − outbound)
+* FIFO-based queue for batch-level HPP precision
+* Automatic anomaly detection (late input, negative stock, missing gate)
+* Checkpoint and recovery system for isolated SKU repair
+
+### Purchasing & Production
+
+* Full purchasing flow: Request → PO → Setor / Outsourcing → Finishing → FG
+* Item-level traceability through order reference
+* Integrated cost tracking for assemblies and components
+
+### Sales & Distribution
+
+* End-to-end flow: SO → SJ → NC → DO
+* Automatic backorder and plan alignment
+* Real-time stock linkage on every order
+
+### Finance & Accounting
+
+* Automated journal entries based on system events
+* Integrated customer and supplier payment tracking
+* Master account mapping with ledger synchronization
+* Grade-based customer credit limit (plafon) management
+
+### Human Resource
+
+* Attendance tracking with RFID integration
+* Policy-based scheduling per department or unit
+* Employee activity and audit logs
+
+### System & Monitoring
+
+* Centralized system log for critical actions
+* Issue tracking with comments, priority, and department routing
+* Branding and production time tracking
+* Background queues for recalculation and cache refresh
 
 ---
 
-## 👨‍💻 My Role
-I was responsible for **the entire architecture and implementation**, including:
-- Database design (schemas, triggers, functions, views)
-- Go backend (repository, service, handler layers)
-- Redis caching and async queue logic
-- Frontend dashboard (React + TypeScript + Tailwind)
-- CI/CD pipeline via GitHub Actions + Docker Compose
+## Design Principles
+
+* Domain Modularity: Each department operates independently but stays synchronized through event queues
+* Partial Refresh: Only changed data is recalculated
+* Asynchronous Processing: Non-blocking transactions for high performance
+* Anomaly Tolerance: System detects and isolates errors without corrupting historical data
+* Human-Proof Input: Human input mistakes are logged and auditable, never destructive
 
 ---
 
-## 🗺️ Project Roadmap
-1. ✅ Stabilize warehouse + gate + stock movement modules  
-2. ✅ Build real-time stock balance view  
-3. ✅ Implement FIFO queue (active batches only)  
-4. ✅ Integrate async HPP queue  
-5. ✅ Add checkpoint & fix queue system  
-6. 🚧 Develop anomaly audit dashboard  
-7. 🚧 Add Redis cache invalidation & performance monitor  
+## Checkpoint & Recovery
+
+* Automatic checkpointing prevents backdated corruption
+* Repair queues (stock_fix_queue, hpp_queue) only process affected SKUs
+* No full rebuild — keeping uptime and accuracy intact
 
 ---
 
-## 🧩 Key Quote
-> **“FIFO for accuracy, SUM for speed, Queue for peace of mind.”**
+## Results
+
+* ⚡ Real-time validation under 100 ms
+* 💰 Accurate batch-level HPP
+* 🧩 Modular and scalable across multiple warehouses
+* 🛡️ Zero minus-stock incidents
+* 🤖 Automatic anomaly detection and correction queues
 
 ---
 
-## 📁 Related Modules
-- `Department/SupplyChain/stock_service`
-- `Department/FinanceHrGa/accounting_service`
-- `internal/queue`
-- `internal/db`
-- `internal/router`
+## My Role
+
+* Designed the overall system architecture and data flow
+* Built PostgreSQL schema, triggers, functions, and optimized queries
+* Developed backend services in Go using repository-service-handler structure
+* Implemented Redis caching and async event queues
+* Created frontend dashboards using React + TypeScript + TailwindCSS
+* Set up CI/CD automation with Docker and GitHub Actions
 
 ---
 
-## 📸 Screenshots (Coming Soon)
-- Real-time stock dashboard  
-- FIFO & HPP visualization  
-- Audit & anomaly report view  
+## Roadmap
+
+* ✅ Stable warehouse, purchasing, and stock modules
+* ✅ FIFO & HPP queue system integrated
+* ✅ Accounting and journal automation implemented
+* ✅ HR & Attendance system connected
+* ⚠️ Anomaly audit dashboard under development
+* ⚠️ Cache invalidation and performance monitoring planned
 
 ---
 
-## 🧱 License
-This project is part of the **SP Otoparts Internal ERP**, not for public distribution.  
+## Key Quote
+
+> One source of truth, many departments — all synchronized by events.
+
+---
+
+## License
+
+Part of SP Otoparts Internal ERP System — not for public distribution.
 © 2025 M. Novel Rifqi
